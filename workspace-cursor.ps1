@@ -144,24 +144,69 @@ function Ensure-GitIgnore {
     } | Out-Null
 }
 
+function Get-JavaSourceRoot {
+    $isJavaProject = (Test-Path -LiteralPath "pom.xml") -or
+        (Test-Path -LiteralPath "build.gradle") -or
+        (Test-Path -LiteralPath "build.gradle.kts")
+
+    if (-not $isJavaProject) {
+        return $null
+    }
+
+    foreach ($candidate in @("src/main/java", "src/main")) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Invoke-GraphExtractAndCluster {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$ExtractArguments,
+        [Parameter(Mandatory = $true)]
+        [string]$InfoMessage
+    )
+
+    $script:GraphStageLabel = "Graph Extract"
+
+    Measure-Stage -StageName "Graph" -Action {
+        Write-Status -Level "INFO" -Message $InfoMessage
+        Invoke-Graphify -Arguments $ExtractArguments
+        Write-Status -Level "OK" -Message "Knowledge graph extracted"
+    } | Out-Null
+
+    Measure-Stage -StageName "Cluster" -Action {
+        Invoke-Graphify -Arguments @("cluster-only", ".")
+        Write-Status -Level "OK" -Message "Clusters updated"
+    } | Out-Null
+}
+
 function Update-Graph {
     $graphOutputPath = "graphify-out"
     $graphExists = Test-Path -LiteralPath $graphOutputPath
+    $srcRoot = Get-JavaSourceRoot
+
+    # Java: graphify update . scans repo root (pom.xml only). Always re-extract src root.
+    if ($srcRoot) {
+        $message = if ($graphExists) {
+            "Refreshing knowledge graph (Java)..."
+        }
+        else {
+            "Building knowledge graph (first run, Java)..."
+        }
+
+        Invoke-GraphExtractAndCluster -ExtractArguments @(
+            "extract", $srcRoot, "--out", ".", "--code-only"
+        ) -InfoMessage $message
+        return
+    }
 
     if (-not $graphExists) {
-        $script:GraphStageLabel = "Graph Extract"
-
-        Measure-Stage -StageName "Graph" -Action {
-            Write-Status -Level "INFO" -Message "Building knowledge graph (first run)..."
-            Invoke-Graphify -Arguments @("extract", ".", "--code-only")
-            Write-Status -Level "OK" -Message "Knowledge graph extracted"
-        } | Out-Null
-
-        Measure-Stage -StageName "Cluster" -Action {
-            Invoke-Graphify -Arguments @("cluster-only", ".")
-            Write-Status -Level "OK" -Message "Clusters updated"
-        } | Out-Null
-
+        Invoke-GraphExtractAndCluster -ExtractArguments @("extract", ".", "--code-only") `
+            -InfoMessage "Building knowledge graph (first run)..."
         return
     }
 
