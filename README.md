@@ -82,9 +82,10 @@ powershell.exe -ExecutionPolicy Bypass -File ".\workspace-cursor.ps1"
 
 1. Valida Git y Graphify
 2. Si no hay reglas de Cursor → ejecuta `graphify cursor install`
-3. Crea o actualiza `.gitignore` con `.cursor/` y `graphify-out/`
-4. Ejecuta `graphify extract . --code-only` (construcción inicial del grafo)
-5. Ejecuta `graphify cluster-only .` (agrupación de comunidades)
+3. Crea o actualiza `.gitignore` con `.cursor/`, `graphify-out/` y `.cursorignore`
+4. Crea `.cursorignore` si no existe, o añade `!graphify-out/` y `!graphify-out/**` si faltan
+5. Ejecuta `graphify extract . --code-only` (construcción inicial del grafo)
+6. Ejecuta `graphify cluster-only .` (agrupación de comunidades)
 
 **Resultado:** proyecto listo con grafo nuevo, reglas de Cursor y archivos generados ignorados por Git.
 
@@ -101,7 +102,7 @@ powershell.exe -ExecutionPolicy Bypass -File ".\workspace-cursor.ps1"
 
 1. Valida Git y Graphify
 2. Omite `graphify cursor install` si `.cursor/rules/graphify.mdc` ya existe
-3. Asegura entradas en `.gitignore` (sin duplicar)
+3. Asegura entradas en `.gitignore` y las reglas de `graphify-out/` en `.cursorignore` (sin duplicar)
 4. Ejecuta `graphify update .` (actualiza el grafo; los clusters se incluyen por defecto)
 
 **Resultado:** grafo actualizado de forma incremental. Más rápido que la primera ejecución.
@@ -126,14 +127,23 @@ powershell.exe -ExecutionPolicy Bypass -File ".\workspace-cursor.ps1"
 
 **Comportamiento:**
 
-- Crea el archivo si no existe
-- Añade al final `.cursor/` y `graphify-out/` solo si faltan
+- Crea `.gitignore` si no existe
+- Añade al final `.cursor/`, `graphify-out/` y `.cursorignore` solo si faltan
 - No duplica líneas existentes
+- Crea `.cursorignore` si no existe. Si ya existe, conserva sus reglas y añade solo las que falten:
+
+```
+!graphify-out/
+!graphify-out/**
+```
+
+Esas negaciones reabren el grafo para el agente sin versionarlo. Con **Index Repositories for Instant Grep** activo, Cursor no deshace un path ya ignorado por git: Grep y Glob pueden seguir sin ver `graphify-out/`. En ese caso el agente lo lee por ruta directa o ejecuta `graphify` en la terminal.
 
 **Archivos que nunca deben versionarse:**
 
 - `.cursor/` — configuración y reglas generadas por Graphify/Cursor
 - `graphify-out/` — grafo de conocimiento, caché y reportes
+- `.cursorignore` — reapertura local del grafo; cada máquina lo genera el script
 
 ---
 
@@ -178,6 +188,7 @@ Workspace Initializer
 [OK] Graphify installed
 [OK] Cursor rules already installed
 [OK] .gitignore updated
+[OK] .cursorignore already includes graphify-out
 [OK] Knowledge graph updated
 [OK] Clusters updated (included in graph update)
 
@@ -205,7 +216,7 @@ En la primera ejecución, la etiqueta de tiempo muestra `Graph Extract` en lugar
 | Validación Git | Comprueba `.git` | — |
 | Validación Graphify | Comprueba `graphify` en PATH | — |
 | Cursor Rules | Instala reglas solo si faltan | `graphify cursor install` |
-| GitIgnore | Asegura entradas requeridas | — |
+| GitIgnore | Asegura `.gitignore` y las reglas de `.cursorignore` | — |
 | Grafo (primera vez) | Extrae código y agrupa | `graphify extract . --code-only` + `graphify cluster-only .` |
 | Grafo (siguientes) | Actualiza incrementalmente | `graphify update .` |
 
@@ -228,7 +239,7 @@ workspace-init/
 ├── workspace-cursor.ps1    # Script principal
 ├── workspace-cursor.cmd    # Wrapper para PATH (comando: workspace)
 ├── requerimiento.md        # Especificación funcional
-└── .gitignore              # Ignora .cursor/ y graphify-out/ en este repo
+└── .gitignore              # Ignora .cursor/, graphify-out/ y .cursorignore
 ```
 
 ## Licencia
